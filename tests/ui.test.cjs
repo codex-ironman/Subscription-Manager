@@ -41,6 +41,7 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
  const EPS=1;
  for(const width of [320,360,412]){
    await page.setViewportSize({width,height:780});
+   await page.evaluate(()=>scrollTo(0,0));
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'No horizontal overflow at '+width);
    const header=await page.locator('header').boundingBox();
    assert.ok(header&&header.y>=-EPS&&header.x>=-EPS&&header.x+header.width<=width+EPS,'Header stays inside viewport at '+width);
