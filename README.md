@@ -28,7 +28,7 @@ An offline subscription manager for the owner, with received-payment earnings. S
 
 ## Browser version
 
-Open `SubTrack.html` in a browser that supports local storage. It contains the same UI and core features. Browser data belongs to that browser/device, so export a backup before clearing browser data. Background Android notifications are not available in this version. Browser downloads and WhatsApp opening depend on the browser's support.
+Open `app/src/main/assets/index.html` in a browser that supports local storage. It contains the same UI and core features. Browser data belongs to that browser/device, so export a backup before clearing browser data. Background Android notifications are not available in this version. Browser downloads and WhatsApp opening depend on the browser's support.
 
 ## Build an installable signed APK
 
@@ -69,7 +69,9 @@ The unsigned build artifact must be signed before installation. Use the same pri
 - Received-payment totals, year boundaries, schema 1 migration, deletion corrections and payment-history retention.
 - Active renewal extends expiry while keeping the current plan active; expired renewal starts now.
 
-Not verified here: Java/Android compilation, APK signing/installing, visual rendering on a real device, Android WebView bridge, system file picker, notification delivery, WhatsApp intents. These require an Android build and device run.
+Android release compilation succeeded in GitHub Actions run 34832720514 (commit 6730dbf60ab2858b22fd1f3cc6671376a12f2aa0). The APK was signed privately and verified with Android apksigner (v2 and v3 signatures). Its packaged HTML matches the source and compiled DEX is present.
+
+Not yet device-tested: installation, real-screen layout, Android WebView bridge, system file picker, notification delivery and WhatsApp intents.
 
 ## Device acceptance checks after building
 
