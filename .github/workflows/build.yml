@@ -26,6 +26,11 @@ jobs:
           gradle-version: '8.9'
       - name: Check subscription and earnings logic
         run: node tests/core.test.cjs
+      - name: Verify mobile layout and encrypted backups
+        run: |
+          npm install --prefix "$RUNNER_TEMP/ui-tests" playwright@1.51.1
+          "$RUNNER_TEMP/ui-tests/node_modules/.bin/playwright" install --with-deps chromium
+          NODE_PATH="$RUNNER_TEMP/ui-tests/node_modules" node tests/ui.test.cjs
       - name: Install SDK
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - name: Compile release APK

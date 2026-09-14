@@ -23,7 +23,7 @@ public class ReminderService extends JobService {
         NotificationManager nm=c.getSystemService(NotificationManager.class);if(!nm.areNotificationsEnabled())return;
         nm.createNotificationChannel(new NotificationChannel(CHANNEL,"Subscription expiry alerts",NotificationManager.IMPORTANCE_DEFAULT));
         try{
-            JSONArray rows=new JSONObject(p.getString(MainActivity.DATA,"{}")).optJSONArray("subscriptions");if(rows==null)return;
+            JSONArray rows=new JSONObject(SecureStore.read(c)).optJSONArray("subscriptions");if(rows==null)return;
             long now=System.currentTimeMillis();String today=new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.US).format(new Date(now));
             Set<String> previous=p.getStringSet("notified",new HashSet<>()),next=new HashSet<>();int due=0,expired=0;
             for(int i=0;i<rows.length();i++){
@@ -41,7 +41,7 @@ public class ReminderService extends JobService {
                 nm.notify(1702,n);
             }
             p.edit().putStringSet("notified",next).apply();
-        }catch(JSONException ignored){}
+        }catch(Exception ignored){}
     }
     @Override public boolean onStartJob(JobParameters params){new Thread(()->{check(this);jobFinished(params,false);}).start();return true;}
     @Override public boolean onStopJob(JobParameters params){return true;}

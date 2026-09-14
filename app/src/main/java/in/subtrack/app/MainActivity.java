@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
     private WebView web;
+    private String pendingExport;
     private static final int EXPORT=11, IMPORT=12, NOTIFY=13;
     static final String PREF="subtrack", DATA="data";
     static final int LIMIT=5*1024*1024;
@@ -23,14 +24,21 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         web=new WebView(this);
         web.setBackgroundColor(0xfff5f7fa);
-        setContentView(web);
-        web.setOnApplyWindowInsetsListener((v,insets)->{
-            if(Build.VERSION.SDK_INT>=30){
-                android.graphics.Insets sys=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()|WindowInsets.Type.ime());
-                v.setPadding(sys.left,sys.top,sys.right,sys.bottom);
-            } else v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());
-            return insets;
-        });
+        android.widget.FrameLayout root=new android.widget.FrameLayout(this);
+        root.setBackgroundColor(0xfff5f7fa);
+        root.addView(web,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        if(Build.VERSION.SDK_INT>=30){
+            getWindow().setDecorFitsSystemWindows(false);
+            root.setOnApplyWindowInsetsListener((v,insets)->{
+                android.graphics.Insets safe=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()|WindowInsets.Type.ime());
+                // Inset the WebView's containing layout. WebView padding does not reliably
+                // constrain fixed-position HTML content away from the system status bar.
+                v.setPadding(safe.left,safe.top,safe.right,safe.bottom);
+                return WindowInsets.CONSUMED;
+            });
+        }else root.setFitsSystemWindows(true);
+        setContentView(root);
+        root.requestApplyInsets();
         WebSettings w=web.getSettings();
         w.setJavaScriptEnabled(true);w.setDomStorageEnabled(false);
         w.setAllowFileAccess(false);w.setAllowContentAccess(false);
@@ -63,10 +71,10 @@ public class MainActivity extends Activity {
     }
     void result(String text){runOnUiThread(()->{if(web!=null)web.evaluateJavascript("window.nativeResult("+JSONObject.quote(text)+")",null);});}
     class Bridge {
-        @JavascriptInterface public String load(){return getSharedPreferences(PREF,0).getString(DATA,"");}
+        @JavascriptInterface public String load(){try{return SecureStore.read(MainActivity.this);}catch(Exception ex){return "unreadable-saved-data";}}
         @JavascriptInterface public boolean save(String raw){
-            try{if(raw.getBytes(StandardCharsets.UTF_8).length>LIMIT)return false;JSONObject o=new JSONObject(raw);if(o.getInt("schema")!=2||o.getJSONArray("subscriptions").length()>10000)return false;
-                boolean ok=getSharedPreferences(PREF,0).edit().putString(DATA,raw).commit();if(ok)ReminderService.schedule(MainActivity.this);return ok;
+            try{if(raw.getBytes(StandardCharsets.UTF_8).length>LIMIT)return false;JSONObject o=new JSONObject(raw);if(o.getInt("schema")!=3||o.getJSONArray("subscriptions").length()>10000)return false;
+                boolean ok=SecureStore.write(MainActivity.this,raw);if(ok)ReminderService.schedule(MainActivity.this);return ok;
             }catch(Exception ex){return false;}
         }
         @JavascriptInterface public void whatsapp(String phone,String text){runOnUiThread(()->{
@@ -74,7 +82,10 @@ public class MainActivity extends Activity {
             Uri uri=Uri.parse("https://wa.me/"+phone+"?text="+Uri.encode(text));
             try{startActivity(new Intent(Intent.ACTION_VIEW,uri));}catch(ActivityNotFoundException ex){result("Install WhatsApp or a browser to open this reminder.");}
         });}
-        @JavascriptInterface public void backup(){runOnUiThread(()->{
+        @JavascriptInterface public void backup(String encryptedBackup){
+            try{JSONObject envelope=new JSONObject(encryptedBackup);if(!"MSM-ENCRYPTED".equals(envelope.getString("format"))||encryptedBackup.getBytes(StandardCharsets.UTF_8).length>LIMIT*2){result("Invalid backup.");return;}}catch(Exception ex){result("Invalid backup.");return;}
+            runOnUiThread(()->{
+            pendingExport=encryptedBackup;
             Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"My-Subscription-Manager-backup-"+new java.text.SimpleDateFormat("yyyy-MM-dd",java.util.Locale.US).format(new java.util.Date())+".json");
             try{startActivityForResult(i,EXPORT);}catch(ActivityNotFoundException ex){result("No file picker found on this device.");}
         });}
@@ -95,8 +106,8 @@ public class MainActivity extends Activity {
         super.onActivityResult(request,resultCode,intent);if(resultCode!=RESULT_OK||intent==null||intent.getData()==null)return;Uri uri=intent.getData();
         new Thread(()->{
             try{
-                if(request==EXPORT){String raw=getSharedPreferences(PREF,0).getString(DATA,"{\"schema\":1,\"settings\":{\"business\":\"\",\"phonepe\":\"\",\"language\":\"hinglish\"},\"subscriptions\":[]}");try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IOException();out.write(raw.getBytes(StandardCharsets.UTF_8));}result("Backup saved successfully.");}
-                else if(request==IMPORT){ByteArrayOutputStream out=new ByteArrayOutputStream();try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(out.size()+n>LIMIT)throw new IOException("Backup exceeds 5 MB.");out.write(buf,0,n);}}String raw=new String(out.toByteArray(),StandardCharsets.UTF_8);runOnUiThread(()->{if(web!=null)web.evaluateJavascript("window.importBackup("+JSONObject.quote(raw)+")",null);});}
+                if(request==EXPORT){String raw=pendingExport;if(raw==null)throw new IOException("Export interrupted; please export again.");try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IOException();out.write(raw.getBytes(StandardCharsets.UTF_8));}pendingExport=null;result("Encrypted backup saved successfully.");}
+                else if(request==IMPORT){ByteArrayOutputStream out=new ByteArrayOutputStream();try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(out.size()+n>LIMIT*2)throw new IOException("Backup is too large.");out.write(buf,0,n);}}String raw=new String(out.toByteArray(),StandardCharsets.UTF_8);runOnUiThread(()->{if(web!=null)web.evaluateJavascript("window.importBackup("+JSONObject.quote(raw)+")",null);});}
             }catch(Exception ex){result("Could not read or save the backup. Check file access and available space.");}
         }).start();
     }

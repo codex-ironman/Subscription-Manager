@@ -1,6 +1,18 @@
-# My Subscription Manager 1.1
+# My Subscription Manager 1.2
 
 An offline subscription manager for the owner, with received-payment earnings. Source code for the Android app and its matching browser version. GitHub Actions compiles an unsigned release APK; the private release key stays outside this public repository.
+
+## Version 1.2
+
+- Android 11+ uses an inset outer layout to keep the WebView clear of system bars, cutouts and the keyboard.
+- Choose an existing customer or tap Another service to reuse their name and WhatsApp number. Each subscription keeps separate validity and credentials.
+- Optional service login ID/email and masked password; credentials never appear in reminder messages.
+- Android saved records use Android Keystore AES-GCM encryption. Legacy records migrate on read.
+- Portable backups are password-protected with AES-256-GCM and PBKDF2-SHA256 (210,000 iterations). Legacy unencrypted JSON backups can still be imported. Backup passwords cannot be recovered.
+- The standalone browser version stores live records in its browser profile. Prefer Android for sensitive credentials.
+- Online sync is not connected; encrypted backup/restore supports manual transfer between devices.
+- Same application ID and signing key as 1.1.0; version code 3.
+- The build checks mobile browser layout at 320/360/412px, multiple subscriptions per person, credential persistence and encrypted backups. Native Android inset/storage behavior still needs device testing.
 
 ## Version 1.1 additions
 
@@ -23,8 +35,8 @@ An offline subscription manager for the owner, with received-payment earnings. S
 - Editable provider choices: Netflix, Prime Video, Hotstar, SonyLIV, ZEE5, Spotify, YouTube, regional OTT services, bundles, Nuvio, and custom names. This is an editable label catalog, not a verified exhaustive list of currently operating providers.
 - WhatsApp reminders in Hinglish or English, with optional amount, sender name and PhonePe number. Opens a prepared message for review and manual Send. No automatic WhatsApp delivery or payment processing.
 - Android local notification checks approximately hourly when enabled, for plans expiring within 3 days and expired plans. Deduplicates each plan/status/day. Reboot-persistent scheduling. Android can delay checks; force-stop pauses them until reopening. Notifications do not send WhatsApp messages.
-- Export/restore through Android's file picker. Versioned JSON backup, validation, size limit, and replace confirmation. Settings are included. Backup files are readable, so keep them private.
-- No login, ads, analytics, external SDKs or Internet permission. Customer records are in app-private preferences. Android automatic cloud backup is disabled; export manually before uninstalling or changing phones.
+- Export/restore through Android's file picker. Versioned JSON backup, validation, size limit, and replace confirmation. Settings are included. New backups are password-encrypted; keep the password safe.
+- No login, ads, analytics, external SDKs or Internet permission. Android customer records are encrypted in app-private preferences. Android automatic cloud backup is disabled; export manually before uninstalling or changing phones.
 
 ## Browser version
 

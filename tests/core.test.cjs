@@ -18,7 +18,7 @@ assert.equal(c.countdown({...row,expiry:now},now),'Expired · 0 days');
 assert.equal(c.countdown({...row,expiry:now+DAY+3600000+61000},now),'1d 01h 01m 01s');
 const data={schema:1,settings:{business:'Test',phonepe:'9876543210',language:'hinglish'},subscriptions:[row]};
 assert.equal(c.validate(JSON.parse(JSON.stringify(data))).subscriptions[0].name,row.name);
-assert.throws(()=>c.validate({...data,schema:3}));
+assert.throws(()=>c.validate({...data,schema:4}));
 assert.throws(()=>c.validate({...data,subscriptions:[row,row]}));
 assert.throws(()=>c.validate({...data,subscriptions:[{...row,expiry:row.expiry+1}]}));
 assert.throws(()=>c.validate({...data,subscriptions:[{...row,days:-1}]}));
@@ -45,4 +45,7 @@ assert.throws(()=>c.validate({...v2,payments:[payment('bad','2026-09-14',-100)]}
 assert.throws(()=>c.validate({...v2,payments:[payment('bad','2026-09-14',1.5)]}));
 assert.throws(()=>c.validate({...v2,payments:[payments[0],payments[0]]}));
 assert.equal(c.monthTotal(payments.filter(p=>p.id!=='p2'),'2026-09'),19900);
+const migrated=c.validate(v2);assert.equal(migrated.schema,3);assert.equal(migrated.subscriptions[0].loginId,'');assert.equal(migrated.subscriptions[0].loginPassword,'');
+const withCredentials={...migrated,subscriptions:[{...migrated.subscriptions[0],loginId:'user@example.com',loginPassword:'Private!123'}]};assert.equal(c.validate(JSON.parse(JSON.stringify(withCredentials))).subscriptions[0].loginPassword,'Private!123');
+assert.throws(()=>c.validate({...withCredentials,subscriptions:[{...withCredentials.subscriptions[0],loginPassword:55}]}));
 console.log('PASS: syntax, phones, countdown, expiry, renewal, schema migration, backup rejection, monthly receipts, year boundaries, payment corrections, history preservation.');
