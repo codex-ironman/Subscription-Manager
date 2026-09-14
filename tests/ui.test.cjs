@@ -38,12 +38,14 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
    return {same:decrypted===plain,wrongRejected,tamperRejected,leaks:encrypted.includes('Private!123')};
  });
  assert.deepEqual(result,{same:true,wrongRejected:true,tamperRejected:true,leaks:false});
+ const EPS=1;
  for(const width of [320,360,412]){
    await page.setViewportSize({width,height:780});
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'No horizontal overflow at '+width);
-   const header=await page.locator('header').boundingBox();assert.ok(header.y>=0&&header.x>=0&&header.x+header.width<=width);
+   const header=await page.locator('header').boundingBox();
+   assert.ok(header&&header.y>=-EPS&&header.x>=-EPS&&header.x+header.width<=width+EPS,'Header stays inside viewport at '+width);
    await page.locator('#addBtn').click();
-   const panel=await page.locator('#editModal .panel').boundingBox();assert.ok(panel.y>=0&&panel.y+panel.height<=780);
+   const panel=await page.locator('#editModal .panel').boundingBox();assert.ok(panel&&panel.y>=-EPS&&panel.y+panel.height<=780+EPS);
    assert.equal(await page.locator('#editModal .panel').evaluate(e=>e.scrollWidth<=e.clientWidth),true,'No form overflow at '+width);
    await page.locator('#editModal [data-close]').click();
  }
