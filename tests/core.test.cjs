@@ -1,0 +1,48 @@
+// Executes the actual pure functions embedded in the shipped UI.
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const html=fs.readFileSync(__dirname+'/../app/src/main/assets/index.html','utf8');
+const script=html.match(/<script>([\s\S]*)<\/script>/)[1];
+new vm.Script(script); // All UI JavaScript must parse.
+const validation=script.slice(script.indexOf('function normalizePhone'),script.indexOf('\ntry{const raw='));
+const clock=script.slice(script.indexOf('function status'),script.indexOf('function el('));
+const c=vm.createContext({});vm.runInContext('const DAY=86400000;'+validation+clock,c);
+const DAY=86400000,now=1800000000000;
+let row={id:'a',name:'Customer <script>',phone:'919876543210',service:'Netflix',notes:'',amount:149,start:now-29*DAY,days:30,expiry:now+DAY};
+assert.equal(c.normalizePhone('98765 43210'),'919876543210');
+assert.equal(c.normalizePhone('+44 7700 900123'),'447700900123');
+assert.throws(()=>c.normalizePhone('abc'));
+assert.equal(c.status(row,now),'soon');assert.equal(c.status({...row,expiry:now},now),'expired');
+assert.equal(c.status({...row,expiry:now+4*DAY},now),'active');
+assert.equal(c.status({...row,start:now+DAY},now),'scheduled');
+assert.equal(c.countdown({...row,expiry:now},now),'Expired · 0 days');
+assert.equal(c.countdown({...row,expiry:now+DAY+3600000+61000},now),'1d 01h 01m 01s');
+const data={schema:1,settings:{business:'Test',phonepe:'9876543210',language:'hinglish'},subscriptions:[row]};
+assert.equal(c.validate(JSON.parse(JSON.stringify(data))).subscriptions[0].name,row.name);
+assert.throws(()=>c.validate({...data,schema:3}));
+assert.throws(()=>c.validate({...data,subscriptions:[row,row]}));
+assert.throws(()=>c.validate({...data,subscriptions:[{...row,expiry:row.expiry+1}]}));
+assert.throws(()=>c.validate({...data,subscriptions:[{...row,days:-1}]}));
+assert.throws(()=>c.validate({...data,subscriptions:[{...row,phone:'invalid'}]}));
+assert.throws(()=>c.validate({...data,subscriptions:[{...row,amount:-10}]}));
+// A renewal must extend current expiry and preserve the running active plan.
+let active={...row,start:now-10*DAY,days:30,expiry:now+20*DAY};
+const renew=(r,days)=>c.extendRecord(r,days,now);
+let renewed=renew(active,30);assert.equal(renewed.start,active.start);assert.equal(renewed.expiry,active.expiry+30*DAY);assert.equal(c.status(renewed,now),'active');
+let expired={...row,start:now-31*DAY,expiry:now-DAY};renewed=renew(expired,30);assert.equal(renewed.start,now);assert.equal(renewed.expiry,now+30*DAY);
+assert.throws(()=>renew(active,0));assert.throws(()=>renew(active,1.5));
+assert.equal(c.validate(data).payments.length,0,'Legacy quoted prices must not be counted as receipts');
+const payment=(id,date,amountPaise)=>({id,subscriptionId:'a',name:'Customer',service:'Other OTT',amountPaise,date,note:''});
+const payments=[payment('p1','2026-08-31',10000),payment('p2','2026-09-01',12550),payment('p3','2026-09-14',19900),payment('p4','2025-09-14',999)];
+assert.equal(c.monthTotal(payments,'2026-09'),32450);
+assert.equal(c.monthTotal(payments,'2026-08'),10000);
+assert.equal(c.monthTotal(payments,'2026-10'),0);
+assert.equal(JSON.stringify(c.monthKeys('2026-02',6)),JSON.stringify(['2025-09','2025-10','2025-11','2025-12','2026-01','2026-02']));
+const v2={...data,schema:2,payments};
+assert.equal(c.validate(JSON.parse(JSON.stringify(v2))).payments.length,4);
+assert.equal(c.validate({...v2,subscriptions:[]}).payments.length,4,'Deleting subscription retains received-payment history');
+assert.throws(()=>c.validate({...v2,payments:[payment('bad','2026-02-30',100)]}));
+assert.throws(()=>c.validate({...v2,payments:[payment('bad','2026-09-14',-100)]}));
+assert.throws(()=>c.validate({...v2,payments:[payment('bad','2026-09-14',1.5)]}));
+assert.throws(()=>c.validate({...v2,payments:[payments[0],payments[0]]}));
+assert.equal(c.monthTotal(payments.filter(p=>p.id!=='p2'),'2026-09'),19900);
+console.log('PASS: syntax, phones, countdown, expiry, renewal, schema migration, backup rejection, monthly receipts, year boundaries, payment corrections, history preservation.');
