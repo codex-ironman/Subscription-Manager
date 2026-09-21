@@ -1,0 +1,98 @@
+name: Publish signed Subscription Manager APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'release-assets/**'
+      - 'signing/release-certificate.sha256'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: subscription-manager-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: false
+      - name: Install APK verification tools
+        run: sdkmanager 'build-tools;35.0.0'
+      - name: Verify signed release and source build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, re, subprocess, zipfile
+          root=pathlib.Path.cwd()
+          m=json.loads((root/'release-assets/release.json').read_text())
+          assert re.fullmatch(r'v\d+\.\d+\.\d+',m['tag'])
+          assert m['tag']=='v'+m['versionName']
+          assert re.fullmatch(r'[a-f0-9]{40}',m['sourceCommit'])
+          assert re.fullmatch(r'[A-Za-z0-9._-]+\.apk',m['apk'])
+          apk=root/'release-assets'/m['apk']
+          assert hashlib.sha256(apk.read_bytes()).hexdigest()==m['sha256'], 'APK checksum mismatch'
+          pin=(root/'signing/release-certificate.sha256').read_text().strip()
+          assert re.fullmatch(r'[a-f0-9]{64}',pin) and m['certificateSha256']==pin
+          tools=pathlib.Path(os.environ['ANDROID_HOME'])/'build-tools/35.0.0'
+          certs=subprocess.check_output([str(tools/'apksigner'),'verify','--verbose','--print-certs',str(apk)],text=True)
+          assert 'Number of signers: 1' in certs
+          assert 'Signer #1 certificate SHA-256 digest: '+pin in certs, 'Wrong signing key'
+          badging=subprocess.check_output([str(tools/'aapt'),'dump','badging',str(apk)],text=True)
+          assert "package: name='in.subtrack.app'" in badging
+          assert "versionCode='"+str(m['versionCode'])+"'" in badging
+          assert "versionName='"+m['versionName']+"'" in badging
+          subprocess.run(['git','merge-base','--is-ancestor',m['sourceCommit'],'HEAD'],check=True)
+          source=subprocess.check_output(['git','show',m['sourceCommit']+':app/src/main/assets/index.html'])
+          with zipfile.ZipFile(apk) as z:
+              assert z.read('assets/index.html')==source, 'Packaged UI differs from tested source'
+          run=json.loads(subprocess.check_output(['gh','api','repos/'+os.environ['GITHUB_REPOSITORY']+'/actions/runs/'+str(m['verifiedBuildRun'])],text=True))
+          assert run['head_sha']==m['sourceCommit'] and run['conclusion']=='success', 'Source build was not successful'
+          releases=json.loads(subprocess.check_output(['gh','api','repos/'+os.environ['GITHUB_REPOSITORY']+'/releases'],text=True))
+          for release in releases:
+              if release['draft'] or release['tag_name']==m['tag']: continue
+              manifest=next((a for a in release['assets'] if a['name']=='release.json'),None)
+              if manifest:
+                  previous=json.loads(subprocess.check_output(['gh','api','repos/'+os.environ['GITHUB_REPOSITORY']+'/releases/assets/'+str(manifest['id']),'-H','Accept: application/octet-stream'],text=True))
+                  assert previous['certificateSha256']==pin, 'Changing the permanent key is forbidden'
+                  assert m['versionCode']>previous['versionCode'], 'Version code must increase'
+          out=root/'release-public';out.mkdir(exist_ok=True)
+          (out/m['apk']).write_bytes(apk.read_bytes())
+          (out/'release.json').write_text(json.dumps(m,indent=2)+'\n')
+          (out/'SHA256SUMS.txt').write_text(m['sha256']+'  '+m['apk']+'\n')
+          (out/'release-certificate.sha256').write_text(pin+'\n')
+          (out/'notes.md').write_text('Installable Android APK.\n\n- Multiple IDs per customer with individual expiry and payments\n- Expanded OTT and custom app tracking\n- Days and pro-rata refund calculator; pending/paid/waived refunds\n- My Income with receipts, supplier costs and paid refunds\n- Improved mobile alignment and encrypted backups\n\nThis is the first release using the permanent signing key. Future releases must use the same certificate.\n\nApplication ID: `in.subtrack.app`\nVersion: '+m['versionName']+' ('+str(m['versionCode'])+')\n')
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('RELEASE_TAG='+m['tag']+'\nRELEASE_APK='+m['apk']+'\n')
+          print('Verified APK checksum, permanent signing certificate, package/version and successful source build.')
+          PY
+      - name: Publish installable APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to overwrite signed assets.'
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" \
+            "release-public/$RELEASE_APK" \
+            release-public/SHA256SUMS.txt \
+            release-public/release-certificate.sha256 \
+            release-public/release.json \
+            --target "$GITHUB_SHA" \
+            --title "My Subscription Manager $RELEASE_TAG" \
+            --notes-file release-public/notes.md \
+            --latest

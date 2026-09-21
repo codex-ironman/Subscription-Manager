@@ -6,12 +6,11 @@ command -v gradle >/dev/null || { echo 'Install Gradle 8.9 first.'; exit 1; }
 subtrack_sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 subtrack_signer="$subtrack_sdk/build-tools/35.0.0/apksigner"
 [[ -x "$subtrack_signer" ]] || { echo 'Install Android SDK platform 35 and build tools 35.0.0.'; exit 1; }
-export SUBTRACK_KEYSTORE="${SUBTRACK_KEYSTORE:-$PWD/signing/subtrack.jks}"
-export SUBTRACK_KEY_ALIAS="${SUBTRACK_KEY_ALIAS:-subtrack}"
+export SUBTRACK_KEYSTORE="${SUBTRACK_KEYSTORE:-$PWD/signing/subscription-manager-release.p12}"
+export SUBTRACK_KEY_ALIAS="${SUBTRACK_KEY_ALIAS:-subscription-manager}"
 [[ -f "$SUBTRACK_KEYSTORE" ]] || { echo 'Original release keystore required. No replacement key will be generated.'; exit 1; }
-[[ -f "${SUBTRACK_PREVIOUS_APK:-}" ]] || { echo 'Set SUBTRACK_PREVIOUS_APK to the previously installed signed release APK for certificate verification.'; exit 1; }
-subtrack_previous_cert="$("$subtrack_signer" verify --print-certs "$SUBTRACK_PREVIOUS_APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
-[[ -n "$subtrack_previous_cert" ]] || { echo 'Could not verify the previous APK certificate.'; exit 1; }
+subtrack_previous_cert="$(tr -d '\r\n' < signing/release-certificate.sha256)"
+[[ "$subtrack_previous_cert" =~ ^[a-f0-9]{64}$ ]] || { echo 'Permanent signing certificate pin required.'; exit 1; }
 if [[ -z "${SUBTRACK_STORE_PASSWORD:-}" ]]; then
   read -r -s -p 'Original keystore password: ' SUBTRACK_STORE_PASSWORD
   printf '\n'

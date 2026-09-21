@@ -12,11 +12,11 @@ An offline subscription manager for the owner, with received-payment earnings. S
 - My income shows monthly receipts, expenses, paid refunds and net cash income, plus all pending refunds. Pending/waived refunds do not reduce cash. Expenses must be recorded manually; this is cash tracking, not accrual profit.
 - Schema 4 migrates schemas 1–3 without inventing receipts, expenses or refunds. Encrypted backups retain all ledgers. Deleting an ID preserves its financial history.
 - Consistent narrow-screen cards, wrapping actions, grid sizing and scrollable dialogs. Native Android system insets are retained.
-- Application ID remains `in.subtrack.app`; version code 4 / 1.3.0. The old private release key is NOT included in this repository and was not available in the update workspace. CI produces an unsigned build, not an installable same-key release. Do not generate a replacement key for an update.
+- Application ID remains `in.subtrack.app`; version code 4 / 1.3.0. The user authorized a new permanent key for the first published APK, v1.3.0. Its SHA-256 fingerprint is pinned in `signing/release-certificate.sha256`. Private recovery material is saved separately as `Subscription-Manager-Permanent-Signing-Backup-PRIVATE.zip`; never commit it. All subsequent releases must reuse that exact key. The compile workflow produces an unsigned build; the release workflow verifies and publishes only a separately signed APK.
 
 ### Verification for 1.3
 
-Core tests cover migration, refund rounding, invalid amounts, stopped/restarted IDs, duplicate refund protection and cash totals. Browser tests exercise multiple IDs for the same customer/app, stop at day 25, ₹50 refund, supplier expense, paid refund, reload and encrypted backup, and layout at 320/360/412px. Android device installation and certificate matching still require the prior signing key and installed-release certificate.
+Core tests cover migration, refund rounding, invalid amounts, stopped/restarted IDs, duplicate refund protection and cash totals. Browser tests exercise multiple IDs for the same customer/app, stop at day 25, ₹50 refund, supplier expense, paid refund, reload and encrypted backup, and layout at 320/360/412px. Android device installation remains untested. The first published APK was signed with the permanent RSA-3072 key and verified with APK Signature Schemes v2 and v3. The release job enforces the pinned certificate, APK checksum, package/version and successful source-build provenance.
 
 ## Version 1.2
 
@@ -68,7 +68,7 @@ On Linux/macOS:
 ./build-apk.sh
 ```
 
-Set `SUBTRACK_PREVIOUS_APK` to the previously installed signed APK. The script requires the original keystore (default `signing/subtrack.jks`, overridable with `SUBTRACK_KEYSTORE` and `SUBTRACK_KEY_ALIAS`), prompts for passwords, verifies that old and new APK certificates match, and builds `app/build/outputs/apk/release/app-release.apk`. Preserve `signing/subtrack.jks` and its password for future updates. Do not commit it or publish passwords. The source has no embedded signing key.
+The script requires the permanent keystore (default `signing/subscription-manager-release.p12`, alias `subscription-manager`, overridable with `SUBTRACK_KEYSTORE` and `SUBTRACK_KEY_ALIAS`), prompts for passwords, verifies the built APK against the pinned certificate, and builds `app/build/outputs/apk/release/app-release.apk`. Preserve `signing/subscription-manager-release.p12` and its password for future updates. Do not commit it or publish passwords. The source has no embedded signing key.
 
 In Android Studio: open this folder, install the requested SDK, sync Gradle, then use **Build > Generate Signed App Bundle / APK > APK**. Use the original signing key for updates; do not create a replacement. The Gradle project targets Android 15 with minimum Android 8.0 and no native CPU-specific libraries.
 
@@ -110,3 +110,9 @@ Not yet device-tested: installation, real-screen layout, Android WebView bridge,
 5. Enable phone notifications and allow Android permission; confirm alerts for a due plan.
 6. Check layout with your system font size, keyboard open, and on narrow screens.
 
+
+## Signed releases and permanent key
+
+`release-assets/release.json` identifies the signed APK, checksum, version and successful compile run. Updating this manifest and signed APK triggers `.github/workflows/release.yml`. Only the signed public APK is stored in Git; no signing secrets are committed. The job validates the pinned certificate and previous release certificate, checks package/version and source-build provenance, then creates a GitHub Release with a direct installable APK asset. Existing releases are never overwritten.
+
+Future update procedure: recover the same private signing backup, increment version code, build/test, sign with the permanent key, update the release manifest and signed APK, and publish. Missing or mismatched keys must block signing/publication; never automatically generate another key.
