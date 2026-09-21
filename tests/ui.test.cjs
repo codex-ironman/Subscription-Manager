@@ -9,6 +9,7 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
  const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
  await page.goto('http://127.0.0.1:'+server.address().port);
+ assert.equal(await page.evaluate(()=>typeof window.startTelegramBackup),'function');
  await page.locator('#addBtn').click();
  await page.locator('#personName').fill('Demo Customer');await page.locator('#phone').fill('9876543210');
  await page.locator('#service').selectOption('Netflix');await page.locator('#loginId').fill('demo@example.com');await page.locator('#loginPassword').fill('Private!123');

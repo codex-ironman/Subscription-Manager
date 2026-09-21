@@ -17,11 +17,13 @@ public class MainActivity extends Activity {
     private WebView web;
     private String pendingExport;
     private static final int EXPORT=11, IMPORT=12, NOTIFY=13;
+    private boolean startupBackupPromptShown;
     static final String PREF="subtrack", DATA="data";
     static final int LIMIT=5*1024*1024;
     private final String origin="https://app.subtrack.local/";
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        startupBackupPromptShown=state!=null;
         web=new WebView(this);
         web.setBackgroundColor(0xfff5f7fa);
         android.widget.FrameLayout root=new android.widget.FrameLayout(this);
@@ -45,6 +47,10 @@ public class MainActivity extends Activity {
         w.setBlockNetworkLoads(true);w.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         web.addJavascriptInterface(new Bridge(),"Android");
         web.setWebViewClient(new WebViewClient(){
+            @Override public void onPageFinished(WebView view,String url){
+                super.onPageFinished(view,url);
+                if(origin.equals(url))view.postDelayed(()->showStartupBackupPrompt(),250);
+            }
             @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest req){
                 try {
                     if(req.getUrl().toString().equals(origin))return new WebResourceResponse("text/html","UTF-8",getAssets().open("index.html"));
@@ -69,6 +75,16 @@ public class MainActivity extends Activity {
         web.loadUrl(origin);
         ReminderService.schedule(this);
     }
+    private void showStartupBackupPrompt(){
+        if(startupBackupPromptShown||isFinishing()||web==null)return;
+        startupBackupPromptShown=true;
+        new AlertDialog.Builder(this)
+            .setTitle("Backup your subscriptions")
+            .setMessage("Create a password-encrypted backup and send the JSON file to Telegram now?")
+            .setPositiveButton("Backup to Telegram",(d,b)->{if(web!=null)web.evaluateJavascript("window.startTelegramBackup()",null);})
+            .setNegativeButton("Later",null)
+            .show();
+    }
     void result(String text){runOnUiThread(()->{if(web!=null)web.evaluateJavascript("window.nativeResult("+JSONObject.quote(text)+")",null);});}
     class Bridge {
         @JavascriptInterface public String load(){try{return SecureStore.read(MainActivity.this);}catch(Exception ex){return "unreadable-saved-data";}}
@@ -89,6 +105,10 @@ public class MainActivity extends Activity {
             Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"My-Subscription-Manager-backup-"+new java.text.SimpleDateFormat("yyyy-MM-dd",java.util.Locale.US).format(new java.util.Date())+".json");
             try{startActivityForResult(i,EXPORT);}catch(ActivityNotFoundException ex){result("No file picker found on this device.");}
         });}
+        @JavascriptInterface public void telegramBackup(String encryptedBackup){
+            try{JSONObject envelope=new JSONObject(encryptedBackup);if(!"MSM-ENCRYPTED".equals(envelope.getString("format"))||encryptedBackup.getBytes(StandardCharsets.UTF_8).length>LIMIT*2){result("Invalid backup.");return;}}catch(Exception ex){result("Invalid backup.");return;}
+            shareTelegramBackup(encryptedBackup);
+        }
         @JavascriptInterface public void restore(){runOnUiThread(()->{
             Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE);
             try{startActivityForResult(i,IMPORT);}catch(ActivityNotFoundException ex){result("No file picker found on this device.");}
@@ -99,6 +119,28 @@ public class MainActivity extends Activity {
             if(!nm.areNotificationsEnabled()){startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()));result("Allow notifications in Android settings, then tap Enable again.");return;}
             enableNotifications();
         });}
+    }
+    private void shareTelegramBackup(String encryptedBackup){
+        new Thread(()->{
+            try{
+                File dir=new File(getCacheDir(),"telegram-backups");
+                if(!dir.exists()&&!dir.mkdirs())throw new IOException("Could not create backup folder.");
+                String name="My-Subscription-Manager-backup-"+new java.text.SimpleDateFormat("yyyy-MM-dd-HHmmss",java.util.Locale.US).format(new java.util.Date())+".json";
+                File file=new File(dir,name);
+                try(OutputStream out=new FileOutputStream(file)){out.write(encryptedBackup.getBytes(StandardCharsets.UTF_8));}
+                Uri uri=new Uri.Builder().scheme("content").authority(getPackageName()+".backup").appendPath(name).build();
+                Intent send=new Intent(Intent.ACTION_SEND).setType("application/json").putExtra(Intent.EXTRA_STREAM,uri).putExtra(Intent.EXTRA_SUBJECT,"My Subscription Manager backup").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                send.setClipData(ClipData.newRawUri("Encrypted subscription backup",uri));
+                runOnUiThread(()->{
+                    if(startShare(send,"org.telegram.messenger"))return;
+                    if(startShare(send,"org.telegram.messenger.web"))return;
+                    try{startActivity(Intent.createChooser(new Intent(send).setPackage(null),"Send encrypted backup"));}catch(ActivityNotFoundException ex){result("No compatible sharing app found.");}
+                });
+            }catch(Exception ex){result("Could not prepare the Telegram backup file.");}
+        }).start();
+    }
+    private boolean startShare(Intent base,String packageName){
+        try{startActivity(new Intent(base).setPackage(packageName));return true;}catch(ActivityNotFoundException|SecurityException ex){return false;}
     }
     private void enableNotifications(){getSharedPreferences(PREF,0).edit().putBoolean("alerts",true).apply();ReminderService.schedule(this);ReminderService.check(this);result("Expiry alerts enabled on this phone.");}
     @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] grants){super.onRequestPermissionsResult(code,permissions,grants);if(code==NOTIFY){if(grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED)enableNotifications();else result("Notification permission denied. Countdown still works in the app.");}}
