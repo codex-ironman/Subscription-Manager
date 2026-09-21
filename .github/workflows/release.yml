@@ -74,7 +74,7 @@ jobs:
           (out/'release.json').write_text(json.dumps(m,indent=2)+'\n')
           (out/'SHA256SUMS.txt').write_text(m['sha256']+'  '+m['apk']+'\n')
           (out/'release-certificate.sha256').write_text(pin+'\n')
-          (out/'notes.md').write_text('Installable Android APK.\n\n- Multiple IDs per customer with individual expiry and payments\n- Expanded OTT and custom app tracking\n- Days and pro-rata refund calculator; pending/paid/waived refunds\n- My Income with receipts, supplier costs and paid refunds\n- Improved mobile alignment and encrypted backups\n\nThis is the first release using the permanent signing key. Future releases must use the same certificate.\n\nApplication ID: `in.subtrack.app`\nVersion: '+m['versionName']+' ('+str(m['versionCode'])+')\n')
+          (out/'notes.md').write_text('Installable Android APK.\n\n- Startup backup prompt with encrypted Telegram sharing\n- Multiple IDs per customer with individual expiry and payments\n- Expanded OTT and custom app tracking\n- Days and pro-rata refund calculator; pending/paid/waived refunds\n- My Income with receipts, supplier costs and paid refunds\n- Existing encrypted Files backup and restore remain available\n\nSigned with the same permanent certificate as v1.3.0.\n\nApplication ID: `in.subtrack.app`\nVersion: '+m['versionName']+' ('+str(m['versionCode'])+')\n')
           with open(os.environ['GITHUB_ENV'],'a') as f:
               f.write('RELEASE_TAG='+m['tag']+'\nRELEASE_APK='+m['apk']+'\n')
           print('Verified APK checksum, permanent signing certificate, package/version and successful source build.')
