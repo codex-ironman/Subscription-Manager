@@ -38,6 +38,48 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
    return {same:decrypted===plain,wrongRejected,tamperRejected,leaks:encrypted.includes('Private!123')};
  });
  assert.deepEqual(result,{same:true,wrongRejected:true,tamperRejected:true,leaks:false});
+ // A second ID for the SAME customer and SAME app must remain independent.
+ await page.locator('.add-service').first().click();
+ await page.locator('#service').selectOption('Netflix');await page.locator('#accountLabel').fill('Netflix ID 2');
+ await page.locator('#amount').fill('300');await page.locator('#initialPaid').check();
+ await page.locator('#editForm button[type=submit]').click();
+ assert.equal(await page.locator('.card').count(),3);
+ await page.evaluate(()=>{const r=data.subscriptions.find(x=>x.accountLabel==='Netflix ID 2');const start=new Date(localDate(Date.now()-25*DAY)).getTime();persist({...data,subscriptions:data.subscriptions.map(x=>x.id===r.id?{...x,start,expiry:start+30*DAY}:x)});render()});
+ const secondId=page.locator('.card').filter({has:page.locator('.account-label',{hasText:'Netflix ID 2'})});
+ await secondId.getByRole('button',{name:'Stop / Refund',exact:true}).click();
+ await page.locator('#refundBasis').fill('300');await page.locator('#useSuggested').click();
+ assert.equal(await page.locator('#refundAmount').inputValue(),'50.00');
+ await page.locator('#refundForm button[type=submit]').click();
+ assert.equal(await page.locator('.card.stopped').count(),1);
+ assert.equal(await page.locator('#activeCount').innerText(),'2');
+ await page.locator('#incomeBtn').click();
+ assert.ok((await page.locator('#incomeSummary').innerText()).includes('₹300.00'));
+ await page.locator('#expenseBtn').click();await page.locator('#expenseAmount').fill('200');await page.locator('#expenseNote').fill('Supplier purchase');
+ await page.locator('#expenseForm button[type=submit]').click();
+ assert.equal(await page.locator('.income-total').innerText(),'₹100.00');
+ page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Mark paid today',exact:true}).click();
+ assert.equal(await page.locator('.income-total').innerText(),'₹50.00');
+ fs.mkdirSync('output',{recursive:true});await page.screenshot({path:'output/my-income-360.png'});
+ await page.locator('#incomeModal [data-close]').click();await page.reload();
+ assert.equal(await page.locator('.card.stopped').count(),1);
+ const ledger=await page.evaluate(async()=>validate(JSON.parse(await decryptBackup(JSON.parse(await encryptBackup(JSON.stringify(data),'Test Backup Password!')),'Test Backup Password!'))));
+ assert.equal(ledger.refunds[0].status,'paid');assert.equal(ledger.expenses[0].amountPaise,20000);assert.equal(ledger.payments[0].accountLabel,'Netflix ID 2');
+ await page.locator('#calculatorBtn').click();assert.ok((await page.locator('#calcResult').innerText()).includes('₹50.00'));
+ await page.locator('#calcDays').fill('0');assert.ok((await page.locator('#calcResult').innerText()).includes('Enter a valid'));
+ await page.locator('#calculatorModal [data-close]').click();
+ // Search IDs without exposing passwords, then check new dialogs at narrow sizes.
+ await page.locator('#search').fill('Netflix ID 2');assert.equal(await page.locator('.card').count(),1);
+ await page.locator('#search').fill('');
+ for(const width of [320,360,412]){
+   await page.setViewportSize({width,height:640});
+   for(const [button,modal] of [['incomeBtn','incomeModal'],['calculatorBtn','calculatorModal']]){
+     await page.locator('#'+button).click();
+     assert.equal(await page.locator('#'+modal+' .panel').evaluate(e=>e.scrollWidth<=e.clientWidth),true,'New dialog fits '+width);
+     await page.locator('#'+modal+' [data-close]').click();
+   }
+ }
+ await page.setViewportSize({width:360,height:780});
+
  const EPS=1;
  for(const width of [320,360,412]){
    await page.setViewportSize({width,height:780});
@@ -57,6 +99,7 @@ const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/ht
  await page.locator('#loginId').scrollIntoViewIfNeeded();
  await page.screenshot({path:'output/subscription-form-360.png'});
  assert.deepEqual(errors,[]);
- console.log('PASS: mobile overflow checks, multiple subscriptions per customer, custom service, masked credential persistence, encrypted backup round-trip, wrong-password/tamper rejection.');
+ console.log('PASS: mobile overflow checks, multiple subscriptions per customer, custom service, masked credential persistence, encrypted backup round-trip, wrong-password/tamper rejection, same-app multiple IDs, 30/25 refund, expenses, income, paid status persistence, ID search and new dialog alignment.');
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1});
+

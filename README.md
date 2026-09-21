@@ -1,6 +1,22 @@
-# My Subscription Manager 1.2
+# My Subscription Manager 1.3
 
 An offline subscription manager for the owner, with received-payment earnings. Source code for the Android app and its matching browser version. GitHub Actions compiles an unsigned release APK; the private release key stays outside this public repository.
+
+## Version 1.3
+
+- ID/profile labels and ID search distinguish multiple accounts of the same app sold to one customer. Each retains its own validity, credentials and payment records.
+- Expanded app label catalog for Indian/regional OTT, international streaming, music, software, games and VPN subscriptions. Other accepts any custom app; labels do not imply availability, integration or exhaustive current market coverage.
+- Days/refund calculator: ₹300 / 30 days, 25 days used = ₹50 suggested refund. Uses 24-hour days and integer paise; supports dates-to-days calculation.
+- Stop one ID, review the plan-period amount, calculate the suggested refund, and record the agreed amount. Refund statuses: pending, paid, waived; mistaken statuses can return to pending. Paid action records today's date. Refunds are manually tracked, not transferred.
+- Stopped IDs have a separate filter and no expiry notifications. Extend validity restarts a stopped ID; previous refund history stays intact.
+- My income shows monthly receipts, expenses, paid refunds and net cash income, plus all pending refunds. Pending/waived refunds do not reduce cash. Expenses must be recorded manually; this is cash tracking, not accrual profit.
+- Schema 4 migrates schemas 1–3 without inventing receipts, expenses or refunds. Encrypted backups retain all ledgers. Deleting an ID preserves its financial history.
+- Consistent narrow-screen cards, wrapping actions, grid sizing and scrollable dialogs. Native Android system insets are retained.
+- Application ID remains `in.subtrack.app`; version code 4 / 1.3.0. The old private release key is NOT included in this repository and was not available in the update workspace. CI produces an unsigned build, not an installable same-key release. Do not generate a replacement key for an update.
+
+### Verification for 1.3
+
+Core tests cover migration, refund rounding, invalid amounts, stopped/restarted IDs, duplicate refund protection and cash totals. Browser tests exercise multiple IDs for the same customer/app, stop at day 25, ₹50 refund, supplier expense, paid refund, reload and encrypted backup, and layout at 320/360/412px. Android device installation and certificate matching still require the prior signing key and installed-release certificate.
 
 ## Version 1.2
 
@@ -52,9 +68,9 @@ On Linux/macOS:
 ./build-apk.sh
 ```
 
-The script creates a release signing key locally if absent, prompts for passwords, and builds `app/build/outputs/apk/release/app-release.apk`. Preserve `signing/subtrack.jks` and its password for future updates. Do not commit it or publish passwords. The source has no embedded signing key.
+Set `SUBTRACK_PREVIOUS_APK` to the previously installed signed APK. The script requires the original keystore (default `signing/subtrack.jks`, overridable with `SUBTRACK_KEYSTORE` and `SUBTRACK_KEY_ALIAS`), prompts for passwords, verifies that old and new APK certificates match, and builds `app/build/outputs/apk/release/app-release.apk`. Preserve `signing/subtrack.jks` and its password for future updates. Do not commit it or publish passwords. The source has no embedded signing key.
 
-In Android Studio: open this folder, install the requested SDK, sync Gradle, then use **Build > Generate Signed App Bundle / APK > APK**. Create and preserve your own signing key. The Gradle project targets Android 15 with minimum Android 8.0 and no native CPU-specific libraries.
+In Android Studio: open this folder, install the requested SDK, sync Gradle, then use **Build > Generate Signed App Bundle / APK > APK**. Use the original signing key for updates; do not create a replacement. The Gradle project targets Android 15 with minimum Android 8.0 and no native CPU-specific libraries.
 
 For a quick development build with a local SDK and Gradle:
 
@@ -93,3 +109,4 @@ Not yet device-tested: installation, real-screen layout, Android WebView bridge,
 4. Export a backup; change a record; restore the backup and verify customer details and settings.
 5. Enable phone notifications and allow Android permission; confirm alerts for a due plan.
 6. Check layout with your system font size, keyboard open, and on narrow screens.
+

@@ -28,7 +28,7 @@ public class ReminderService extends JobService {
             Set<String> previous=p.getStringSet("notified",new HashSet<>()),next=new HashSet<>();int due=0,expired=0;
             for(int i=0;i<rows.length();i++){
                 JSONObject r=rows.getJSONObject(i);long expiry=r.getLong("expiry");
-                if(r.getLong("start")>now||expiry-now>3*86400000L)continue;
+                if(!r.isNull("stoppedAt")||r.getLong("start")>now||expiry-now>3*86400000L)continue;
                 String key=today+":"+r.getString("id")+":"+expiry+":"+(expiry<=now?"expired":"due");
                 next.add(key);if(previous.contains(key))continue;
                 if(expiry<=now)expired++;else due++;
@@ -46,3 +46,4 @@ public class ReminderService extends JobService {
     @Override public boolean onStartJob(JobParameters params){new Thread(()->{check(this);jobFinished(params,false);}).start();return true;}
     @Override public boolean onStopJob(JobParameters params){return true;}
 }
+

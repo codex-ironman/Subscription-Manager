@@ -73,7 +73,7 @@ public class MainActivity extends Activity {
     class Bridge {
         @JavascriptInterface public String load(){try{return SecureStore.read(MainActivity.this);}catch(Exception ex){return "unreadable-saved-data";}}
         @JavascriptInterface public boolean save(String raw){
-            try{if(raw.getBytes(StandardCharsets.UTF_8).length>LIMIT)return false;JSONObject o=new JSONObject(raw);if(o.getInt("schema")!=3||o.getJSONArray("subscriptions").length()>10000)return false;
+            try{if(raw.getBytes(StandardCharsets.UTF_8).length>LIMIT)return false;JSONObject o=new JSONObject(raw);if(o.getInt("schema")!=4||o.getJSONArray("subscriptions").length()>10000)return false;
                 boolean ok=SecureStore.write(MainActivity.this,raw);if(ok)ReminderService.schedule(MainActivity.this);return ok;
             }catch(Exception ex){return false;}
         }
@@ -114,3 +114,4 @@ public class MainActivity extends Activity {
     @Override public void onBackPressed(){if(web!=null)web.evaluateJavascript("window.closeSubtrackModal()",value->{if(!"true".equals(value))finish();});else super.onBackPressed();}
     @Override protected void onDestroy(){if(web!=null){web.removeJavascriptInterface("Android");web.destroy();web=null;}super.onDestroy();}
 }
+
